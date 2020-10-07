@@ -1,0 +1,8 @@
+[workspace]
+members = [
+  "rawk-regex",
+  "rawk-cli",
+]
+exclude = [
+  "book",
+]
