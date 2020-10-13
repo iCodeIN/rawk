@@ -30,6 +30,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rawk-compiler"
+version = "0.1.0"
+dependencies = [
+ "rawk-regex",
+ "regex",
+]
+
+[[package]]
 name = "rawk-regex"
 version = "0.1.0"
 dependencies = [

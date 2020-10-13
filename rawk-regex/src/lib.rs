@@ -15,7 +15,7 @@ pub enum Personality {
 pub struct ParseError;
 
 #[derive(Debug, Eq, PartialEq)]
-enum Token {
+pub enum Token {
 	Literal(regex_syntax::ast::Literal),
 	StartBrace(bool),
 	RangeHyphen,
@@ -105,7 +105,7 @@ impl Token {
 	}
 }
 
-struct ExtendedRegexTokens<I> {
+pub struct ExtendedRegexTokens<I> {
 	inner: I,
 	peek: Vec<u8>,
 	push_punct: Option<u8>,
@@ -114,10 +114,21 @@ struct ExtendedRegexTokens<I> {
 	paren_level: u32,
 	terminator: Option<u8>,
 	personality: Personality,
-	offset: usize,
+	pub offset: usize,
 }
 
 impl<I: Iterator<Item=u8>> ExtendedRegexTokens<I> {
+	pub fn new(inner: I, personality: Personality, terminator: Option<u8>) -> ExtendedRegexTokens<I> {
+		ExtendedRegexTokens {
+			inner, personality, terminator,
+			peek: Vec::new(),
+			push_punct: None,
+			is_in_brace: false,
+			is_beginning: true,
+			paren_level: 0,
+			offset: 0,
+		}
+	}
 	fn next_byte(&mut self) -> Option<u8> {
 		if let Some(c) = self.peek.pop() {
 			Some(c)
@@ -477,7 +488,7 @@ pub fn convert(syntax: &[u8], personality: Personality) -> Result<String, ParseE
 }
 
 pub fn convert_terminated(syntax: &[u8], personality: Personality, terminator: u8) -> Result<(String, usize), ParseError> {
-	let (ast, offset) = extended_regex(syntax, personality, None)?;
+	let (ast, offset) = extended_regex(syntax, personality, Some(terminator))?;
 	Ok((ast.to_string(), offset))
 }
 
@@ -510,6 +521,7 @@ fn extended_regex(syntax: &[u8], personality: Personality, terminator: Option<u8
 	}
 	let mut state: Vec<State> = vec![];
 	let mut capture_index = 0;
+	let mut is_terminated = false;
 	for t in &mut tok {
 		match state.last_mut() {
 			Some(&mut State::Bracket(negated, ref mut item, ref mut literals, ref mut after_hyphen)) => {
@@ -631,7 +643,10 @@ fn extended_regex(syntax: &[u8], personality: Personality, terminator: Option<u8
 			}
 			_ => {
 				match t {
-					Token::Terminator(_) => {},
+					Token::Terminator(_) => {
+						is_terminated = true;
+						break;
+					},
 					Token::StartBrace(negated) => {
 						state.push(State::Bracket(negated, ClassSetItem::Empty(span), Vec::new(), false));
 					}
@@ -784,6 +799,9 @@ fn extended_regex(syntax: &[u8], personality: Personality, terminator: Option<u8
 				}
 			}
 		}
+	}
+	if !is_terminated && terminator.is_some() {
+		return Err(ParseError);
 	}
 	Ok((ast, tok.offset))
 }
@@ -1068,7 +1086,11 @@ mod tests {
 	}
 	#[test]
 	fn must_fail() {
-		do_must_fail(br#"/[[:ascii:]]"#);
+		do_must_fail(br#"[[:ascii:]]"#);
+	}
+	#[test]
+	fn must_fail_unterminated() {
+		assert!(super::extended_regex(br#"t"#, Gnu, Some(b'/')).is_err());
 	}
 	fn equiv_regex_posix(posix: &[u8], rust: &str) {
 		let mut builder = regex::bytes::RegexBuilder::new(rust);

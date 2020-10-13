@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "rawk-regex",
+  "rawk-compiler",
   "rawk-cli",
 ]
 exclude = [
